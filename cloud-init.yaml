@@ -3,23 +3,23 @@
 hostname: dnspooq-server
 timezone: Asia/Tokyo
 
-users:
-  - name: ubuntu
-    plain_text_passwd: ubuntu
-    lock_passwd: false
-    sudo: ALL=(ALL) NOPASSWD:ALL
-    groups: sudo, docker
-    shell: /bin/bash
+chpasswd:
+  list: |
+    ubuntu:ubuntu
+    root:ubuntu
+  expire: false
 
 ssh_pwauth: true
 disable_root: false
 
-manage_resolv_conf: true
-resolv_conf:
-  nameservers:
-    - 8.8.8.8
-    - 1.1.1.1
-    - 8.8.4.4
+write_files:
+  - path: /etc/resolv.conf
+    content: |
+      nameserver 8.8.8.8
+      nameserver 1.1.1.1
+      nameserver 8.8.4.4
+    owner: root:root
+    permissions: '0644'
 
 package_update: true
 package_upgrade: true
@@ -45,14 +45,12 @@ packages:
   - htop
 
 runcmd:
-  - |
-    cat > /etc/resolv.conf << 'EOF'
-    nameserver 8.8.8.8
-    nameserver 1.1.1.1
-    nameserver 8.8.4.4
-    EOF
+  - sed -i 's/^PasswordAuthentication no/PasswordAuthentication yes/' /etc/ssh/sshd_config
+  - sed -i 's/^#PermitRootLogin.*$/PermitRootLogin yes/' /etc/ssh/sshd_config
   - systemctl disable systemd-resolved
   - systemctl stop systemd-resolved
+  - systemctl restart sshd
+  - ping -c 3 google.com
   - curl -fsSL https://download.docker.com/linux/ubuntu/gpg | gpg --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg
   - echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable" | tee /etc/apt/sources.list.d/docker.list > /dev/null
   - apt update
@@ -67,8 +65,5 @@ runcmd:
   - chown ubuntu:ubuntu /home/ubuntu/dnspooq
   - echo 'net.ipv4.ip_forward=1' >> /etc/sysctl.conf
   - sysctl -p
-  - sed -i 's/PasswordAuthentication no/PasswordAuthentication yes/' /etc/ssh/sshd_config
-  - systemctl restart sshd
-  - ping -c 3 google.com
   - docker --version
   - docker-compose --version
