@@ -14,28 +14,71 @@ users:
 ssh_pwauth: true
 disable_root: false
 
+# DNS設定を固定
+manage_resolv_conf: true
+resolv_conf:
+  nameservers:
+    - 8.8.8.8
+    - 1.1.1.1
+    - 8.8.4.4
+
 package_update: true
 package_upgrade: true
 
 packages:
-  - docker.io
-  - docker-compose
-  - git
+  - apt-transport-https
+  - ca-certificates
   - curl
+  - gnupg
+  - lsb-release
+  - git
   - wget
   - net-tools
   - dnsutils
+  - rsync
+  - openssh-client
+  - tcpdump
+  - wireshark-common
+  - iptables-persistent
+  - python3
+  - python3-pip
+  - vim
+  - htop
 
 runcmd:
-  - systemctl enable docker
+  # DNS設定を修正
+  - |
+    cat > /etc/resolv.conf << 'EOF'
+    nameserver 8.8.8.8
+    nameserver 1.1.1.1
+    nameserver 8.8.4.4
+    EOF
+  - systemctl disable systemd-resolved
+  - systemctl stop systemd-resolved
+  
+  # Docker公式リポジトリからインストール
+  - curl -fsSL https://download.docker.com/linux/ubuntu/gpg | gpg --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg
+  - echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable" | tee /etc/apt/sources.list.d/docker.list > /dev/null
+  - apt update
+  - apt install -y docker-ce docker-ce-cli containerd.io
   - systemctl start docker
+  - systemctl enable docker
   - usermod -aG docker ubuntu
-  - mkdir -p /home/ubuntu/dnspooq
-  - chown ubuntu:ubuntu /home/ubuntu/dnspooq
+  
+  # Docker Compose最新版をインストール
   - curl -L "https://github.com/docker/compose/releases/latest/download/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
   - chmod +x /usr/local/bin/docker-compose
   - ln -s /usr/local/bin/docker-compose /usr/bin/docker-compose
+  
+  # その他の設定
+  - mkdir -p /home/ubuntu/dnspooq
+  - chown ubuntu:ubuntu /home/ubuntu/dnspooq
   - echo 'net.ipv4.ip_forward=1' >> /etc/sysctl.conf
   - sysctl -p
   - sed -i 's/PasswordAuthentication no/PasswordAuthentication yes/' /etc/ssh/sshd_config
   - systemctl restart sshd
+  
+  # 動作確認
+  - ping -c 3 google.com
+  - docker --version
+  - docker-compose --version
