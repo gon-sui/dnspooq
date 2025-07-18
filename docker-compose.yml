@@ -1,0 +1,56 @@
+version: '3.8'
+
+services:
+  dnsmasq:
+    build: ./dnsmasq
+    container_name: dnspooq-dnsmasq
+    networks:
+      dnspooq:
+        # ここはdnsmasqコンテナのIPに合わせる（10.10.0.0/24範囲で設定）
+        ipv4_address: 10.10.0.2
+    environment:
+      # ここは既存のcacheコンテナのIPに合わせる（実際のホストIP）
+      - CACHE_IP=192.168.115.151  # 既存cacheコンテナのEIPに変更する
+    ports:
+      - "53:53/udp"
+    cap_add:
+      - NET_ADMIN
+    
+  attacker:
+    build: ./attacker
+    container_name: dnspooq-attacker
+    networks:
+      dnspooq:
+        # ここはattackerコンテナのIPに合わせる（10.10.0.0/24範囲で設定）
+        ipv4_address: 10.10.0.3
+    cap_add:
+      - NET_ADMIN
+      - NET_RAW
+    volumes:
+      - ./attacker:/app
+    
+  client:
+    build: ./client
+    container_name: dnspooq-client
+    networks:
+      dnspooq:
+        # ここはclientコンテナのIPに合わせる（10.10.0.0/24範囲で設定）
+        ipv4_address: 10.10.0.6
+    ports:
+      - "6080:80"
+    dns:
+      # ここはdnsmasqコンテナのIPに合わせる（10.10.0.0/24範囲）
+      - 10.10.0.2  # dnsmasqコンテナのIP
+    environment:
+      - VNC_PASSWORD=password
+    volumes:
+      - /dev/shm:/dev/shm
+
+networks:
+  dnspooq:
+    driver: bridge
+    ipam:
+      config:
+        # 注意：作成時にIPは10.10.0.xになる（10.10.0.0/24範囲）
+        # 既存のcache(10.10.0.14)とmalicious(10.10.0.16)と重複しないように設定
+        - subnet: 10.10.0.0/24
